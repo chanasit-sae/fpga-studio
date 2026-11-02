@@ -20,6 +20,30 @@ import time
 from typing import Callable, Dict, List, Optional, Tuple
 
 
+
+def _app_toolchain_roots():
+    """Folders that may contain the bundled toolchain/ directory.
+
+    When frozen, sys._MEIPASS points at _internal/, which does NOT hold the
+    toolchain -- the installer places it next to the .exe. So the real
+    application folder must be searched too.
+    """
+    roots = [os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]
+    if getattr(sys, "frozen", False):
+        roots.append(os.path.dirname(sys.executable))
+    try:
+        from config.catalog import ROOT_DIR as _root_dir
+        if _root_dir:
+            roots.append(_root_dir)
+    except Exception:
+        pass
+    seen, out = set(), []
+    for r in roots:
+        if r and r not in seen:
+            seen.add(r)
+            out.append(r)
+    return out
+
 def find_yosys_binary(toolchain_dir: Optional[str] = None) -> Optional[str]:
     """Search for Yosys open-source synthesis binary."""
     # 1. System PATH
@@ -37,12 +61,12 @@ def find_yosys_binary(toolchain_dir: Optional[str] = None) -> Optional[str]:
             os.path.join(toolchain_dir, "yosys.exe"),
         ])
 
-    app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    cands.extend([
-        os.path.join(app_root, "toolchain", "oss-cad-suite", "bin", "yosys.exe"),
-        os.path.join(app_root, "toolchain", "yosys", "bin", "yosys.exe"),
-        os.path.join(app_root, "toolchain", "yosys.exe"),
-    ])
+    for app_root in _app_toolchain_roots():
+        cands.extend([
+            os.path.join(app_root, "toolchain", "oss-cad-suite", "bin", "yosys.exe"),
+            os.path.join(app_root, "toolchain", "yosys", "bin", "yosys.exe"),
+            os.path.join(app_root, "toolchain", "yosys.exe"),
+        ])
 
     for c in cands:
         if os.path.isfile(c):

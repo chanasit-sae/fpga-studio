@@ -9,7 +9,8 @@
  */
 `include "define.v"
 
-module ex (input wire rst,                  //译码阶段送到执行阶段的信息
+module ex (input wire clk,
+           input wire rst,                  //译码阶段送到执行阶段的信息
            input wire[`AluOpBus] aluop_i,
            input wire[`AluSelBus] alusel_i,
            input wire[`RegBus] reg1_i,
@@ -43,7 +44,15 @@ module ex (input wire rst,                  //译码阶段送到执行阶段的�
            input wire[`RegBus] inst_i,
            output wire[`AluOpBus] aluop_o,
            output wire[`RegBus] mem_addr_o,
-           output wire[`RegBus] reg2_o
+           output wire[`RegBus] reg2_o,
+
+           // ---- multi-cycle divider handshake (see div.v) ----
+           input  wire[`DoubleRegBus] div_result_i,
+           input  wire                div_ready_i,
+           output reg[`RegBus]        div_opdata1_o,
+           output reg[`RegBus]        div_opdata2_o,
+           output reg                 div_start_o,
+           output reg                 signed_div_o
            );            
     
     reg[`RegBus] logicout;      //逻辑操作的结果
@@ -65,6 +74,7 @@ module ex (input wire rst,                  //译码阶段送到执行阶段的�
     wire[`DoubleRegBus] hilo_temp;  // 临时保存乘法结果，宽度为64位
     reg[`DoubleRegBus] hilo_temp1;  // 临时保存累乘加减的结果
     reg stallreq_for_madd_msub;     // 累乘加减发出的流水线暂停请求
+    reg stallreq_for_div;           // 多周期除法器发出的流水线暂停请求
     reg[`DoubleRegBus] mulres;      // 保存乘法结果，宽度为64位
     
     assign aluop_o = aluop_i;
@@ -170,9 +180,48 @@ module ex (input wire rst,                  //译码阶段送到执行阶段的�
         end
     end
 
+    // ***************************** 多周期除法器控制 *****************************
+    always @(*) begin
+        if (rst == `RstEnable) begin
+            stallreq_for_div <= `NoStop;
+            div_opdata1_o    <= `ZeroWord;
+            div_opdata2_o    <= `ZeroWord;
+            div_start_o      <= 1'b0;
+            signed_div_o     <= 1'b0;
+        end else begin
+            stallreq_for_div <= `NoStop;
+            div_opdata1_o    <= `ZeroWord;
+            div_opdata2_o    <= `ZeroWord;
+            div_start_o      <= 1'b0;
+            signed_div_o     <= 1'b0;
+            case (aluop_i)
+                `EXE_DIV_OP: begin
+                    div_opdata1_o <= reg1_i;
+                    div_opdata2_o <= reg2_i;
+                    signed_div_o  <= 1'b1;
+                    if (div_ready_i == 1'b0) begin
+                        div_start_o      <= 1'b1;
+                        stallreq_for_div <= `Stop;
+                    end
+                end
+                `EXE_DIVU_OP: begin
+                    div_opdata1_o <= reg1_i;
+                    div_opdata2_o <= reg2_i;
+                    signed_div_o  <= 1'b0;
+                    if (div_ready_i == 1'b0) begin
+                        div_start_o      <= 1'b1;
+                        stallreq_for_div <= `Stop;
+                    end
+                end
+                default: begin
+                end
+            endcase
+        end
+    end
+
     // 暂停流水线
     always @(*) begin
-        stallreq <= stallreq_for_madd_msub;
+        stallreq <= stallreq_for_madd_msub | stallreq_for_div;
     end
 
     // *********************************************累乘加、累乘减*********************************************
@@ -366,24 +415,16 @@ module ex (input wire rst,                  //译码阶段送到执行阶段的�
             hi_o    <= mulres[63:32];
             lo_o    <= mulres[31:0];
         end
-        else if (aluop_i == `EXE_DIV_OP) begin
+        else if (aluop_i == `EXE_DIV_OP || aluop_i == `EXE_DIVU_OP) begin
+            // result now arrives from the multi-cycle divider; the pipeline is
+            // held by stallreq_for_div until div_ready_i goes high
             whilo_o <= `WriteEnable;
             if (reg2_i == `ZeroWord) begin
                 hi_o <= reg1_i;
                 lo_o <= 32'hFFFFFFFF;
             end else begin
-                hi_o <= $signed(reg1_i) % $signed(reg2_i);
-                lo_o <= $signed(reg1_i) / $signed(reg2_i);
-            end
-        end
-        else if (aluop_i == `EXE_DIVU_OP) begin
-            whilo_o <= `WriteEnable;
-            if (reg2_i == `ZeroWord) begin
-                hi_o <= reg1_i;
-                lo_o <= 32'hFFFFFFFF;
-            end else begin
-                hi_o <= reg1_i % reg2_i;
-                lo_o <= reg1_i / reg2_i;
+                hi_o <= div_result_i[63:32];   // remainder
+                lo_o <= div_result_i[31:0];    // quotient
             end
         end
         else if (aluop_i == `EXE_MTHI_OP) begin
