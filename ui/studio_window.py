@@ -866,6 +866,48 @@ class VSCodeFPGAStudio(tk.Tk, FramelessWindowMixin, SidebarPanelsMixin, BoardPan
             btn.bind("<Leave>", _leave)
             return btn
 
+        def build_board_menu():
+            """Real Digilent Nexys A7 hardware actions, kept separate from the
+            Run menu (which drives the on-screen simulator)."""
+            # these live on the simulator panel; make sure they exist even if
+            # that panel has not been built yet
+            self.hw_exec_mode_var = getattr(self, "hw_exec_mode_var", None) or tk.StringVar(value="step")
+            self.com_port_var = getattr(self, "com_port_var", None) or tk.StringVar(value="AUTO")
+
+            m = SpotifyPopupMenu(self, tag="Board")
+            m.add_command("⚡  แฟลชบิตสตรีม CPU ลงบอร์ด (In-App JTAG)", "F7", self.open_fpga_programmer_dialog)
+            m.add_command("🚀  อัปโหลดโค้ดลงบอร์ดจริง (USB UART)", "", self.upload_to_board)
+            m.add_separator()
+            m.add_radiobutton("🎯  โหมด Step ทีละคำสั่ง (หยุดรอที่ PC=0)", self.hw_exec_mode_var, "step", self._on_hw_mode_changed)
+            m.add_radiobutton("🚀  โหมด Auto-Run (รันเต็มสปีด 25 MHz)", self.hw_exec_mode_var, "autorun", self._on_hw_mode_changed)
+            m.add_separator()
+            m.add_command("▶  รันบอร์ดจริง 25 MHz", "", self.resume_hardware_board)
+            m.add_command("⚡  Step บอร์ดจริง (ก้าวทีละคำสั่ง)", "F11", self.step_hardware_board)
+            m.add_command("⏸  หยุดบอร์ด (Pause)", "", self.pause_hardware_board)
+            m.add_command("🔄  รีเซ็ตบอร์ด PC=0", "", self.reset_hardware_board)
+            m.add_separator()
+
+            port_menu = SpotifyPopupMenu(self, tag="BoardMenuComPort")
+            port_menu.add_radiobutton("🔍 Auto-Detect (ค้นหาบอร์ด Nexys A7 อัตโนมัติ)",
+                                      self.com_port_var, "AUTO", self._on_com_port_changed)
+            try:
+                live_ports = self._detect_serial_ports()
+            except Exception:
+                live_ports = []
+            if live_ports:
+                port_menu.add_separator()
+                for dev, desc, _ in live_ports:
+                    short_desc = desc[:36] + ("..." if len(desc) > 36 else "")
+                    port_menu.add_radiobutton(f"🔌 {dev}  •  {short_desc}",
+                                              self.com_port_var, dev, self._on_com_port_changed)
+            else:
+                port_menu.add_command("⚠️ ไม่พบพอร์ต USB-UART ที่เชื่อมต่ออยู่", "", None, enabled=False)
+            m.add_cascade("🔌  เลือกพอร์ต COM", port_menu)
+
+            m.add_separator()
+            m.add_command("🔬  ตรวจสอบ RTL & Testbench (Co-Simulation)...", "Ctrl+Shift+P", self.open_rtl_verify_dialog)
+            return m
+
         def build_file_menu():
             m = SpotifyPopupMenu(self, tag="File")
             m.add_command("สร้างไฟล์ใหม่ (New File)", "Ctrl+N", self.start_inline_new_file)
@@ -984,6 +1026,7 @@ class VSCodeFPGAStudio(tk.Tk, FramelessWindowMixin, SidebarPanelsMixin, BoardPan
         make_menubutton("CPU", build_cpu_menu)
         make_menubutton("Compiler", build_compiler_menu)
         make_menubutton("Run", build_run_menu)
+        make_menubutton("Board", build_board_menu)
 
     # ==========================================================================
     # LEFT RAIL TOGGLE HANDLERS
