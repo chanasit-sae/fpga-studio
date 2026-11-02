@@ -12,7 +12,6 @@ a = Analysis(
         ('core/fpga_engine_rust.dll', 'core'),
         ('custom_cpus/openmips', 'custom_cpus/openmips'),
         ('custom_cpus/riscv', 'custom_cpus/riscv'),
-        ('toolchain', 'toolchain'),
         ('bitstreams', 'bitstreams'),
     ],
     hiddenimports=[
@@ -46,6 +45,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['app_icon.ico'],
+    version='version_info.txt',
 )
 coll = COLLECT(
     exe,
