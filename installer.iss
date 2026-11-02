@@ -1,8 +1,8 @@
 ; Inno Setup Script for FPGA Studio (Spotify Dark Edition)
-; Generates a professional Windows Setup Installer: FPGA_Studio_Setup_v4.3.exe
+; Generates a professional Windows Setup Installer: FPGA_Studio_Setup_v4.4.exe
 
 #define MyAppName "FPGA Studio"
-#define MyAppVersion "4.3"
+#define MyAppVersion "4.4"
 #define MyAppPublisher "FPGA Studio"
 #define MyAppExeName "FPGA Studio.exe"
 ; SourcePath is provided by ISPP = folder containing this script
@@ -16,7 +16,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL=https://github.com/posweeza558/fpga-studio
 AppSupportURL=https://github.com/posweeza558/fpga-studio/issues
 AppUpdatesURL=https://github.com/posweeza558/fpga-studio/releases
-VersionInfoVersion=4.3.0.0
+VersionInfoVersion=4.4.0.0
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
@@ -24,7 +24,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
 DefaultGroupName={#MyAppName}
 OutputDir={#SourceDir}\installer_output
-OutputBaseFilename=FPGA_Studio_Setup_v4.3
+OutputBaseFilename=FPGA_Studio_Setup_v4.4
 SetupIconFile={#SourceDir}\app_icon.ico
 UninstallDisplayIcon={app}\app_icon.ico
 Compression=lzma2/max

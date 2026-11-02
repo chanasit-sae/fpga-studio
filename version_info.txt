@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(4, 3, 0, 0),
-    prodvers=(4, 3, 0, 0),
+    filevers=(4, 4, 0, 0),
+    prodvers=(4, 4, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -16,12 +16,12 @@ VSVersionInfo(
         [
           StringStruct('CompanyName', 'FPGA Studio'),
           StringStruct('FileDescription', 'FPGA Studio - Integrated FPGA Development & Educational EDA Studio'),
-          StringStruct('FileVersion', '4.3.0.0'),
+          StringStruct('FileVersion', '4.4.0.0'),
           StringStruct('InternalName', 'FPGA Studio'),
           StringStruct('LegalCopyright', 'MIT License'),
           StringStruct('OriginalFilename', 'FPGA Studio.exe'),
           StringStruct('ProductName', 'FPGA Studio'),
-          StringStruct('ProductVersion', '4.3.0.0')
+          StringStruct('ProductVersion', '4.4.0.0')
         ]
       )
     ]),
