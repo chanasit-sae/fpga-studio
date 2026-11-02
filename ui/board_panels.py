@@ -37,6 +37,7 @@ from config.theme import (
 )
 from config.catalog import RV_NAMES, MIPS_NAMES
 from ui.graphics import add_hover_border
+from ui.widgets import attach_tooltip
 from ui.peripheral_dialogs import VGADisplayWindow, UARTTerminalWindow
 
 
@@ -156,6 +157,7 @@ class BoardPanelsMixin:
         self.btn_com_port.pack(side=tk.RIGHT, padx=3, pady=5)
         add_hover_border(self.btn_com_port, BG_PILL_INACT, BG_HOVER, BG_PILL_INACT, BORDER_HOVER)
 
+        sim_quick_btns = []
         for b_txt, b_cmd in [
             ("รีเซ็ต",             self.reset_sim),
             ("ทีละคำสั่ง (Step)",  self.step_sim),
@@ -169,6 +171,7 @@ class BoardPanelsMixin:
             )
             b.pack(side=tk.RIGHT, padx=3, pady=5)
             add_hover_border(b, BG_PILL_INACT, BG_HOVER, BG_PILL_INACT, BORDER_HOVER)
+            sim_quick_btns.append((b, b_cmd))
 
         self.sim_speed_var = getattr(self, "sim_speed_var", None) or tk.StringVar(value="5Hz")
         speed_lbls = {"1Hz": "1 Hz", "5Hz": "5 Hz", "20Hz": "20 Hz", "100Hz": "100 Hz", "max": "Max Speed"}
@@ -192,6 +195,26 @@ class BoardPanelsMixin:
             font=(FONT_UI, 8, "bold"), command=self.toggle_sim
         )
         self.btn_run.pack(side=tk.RIGHT, padx=4, pady=5)
+
+        # Responsive overflow: when the header is too narrow, low-priority
+        # buttons collapse into a trailing "⋯" menu. Listed in creation
+        # order, which is also overflow order -- the first entry hides first,
+        # and btn_run (last) is the final one to go.
+        self._register_header_overflow(hdr, [
+            (btn_wave,             self.open_rtl_verify_dialog,      3),
+            (btn_flash_hw,         self.open_fpga_programmer_dialog, 3),
+            (self.btn_hw_mode,     self._show_hw_mode_popup,         3),
+            (btn_upload,           self.upload_to_board,             3),
+            (self.btn_hw_step,     self.step_hardware_board,         3),
+            (self.btn_hw_pause,    self.pause_hardware_board,        3),
+            (self.btn_hw_run,      self.resume_hardware_board,       3),
+            (self.btn_hw_rst,      self.reset_hardware_board,        3),
+            (self.btn_com_port,    self._show_com_port_popup,        3),
+            (sim_quick_btns[0][0], sim_quick_btns[0][1],             3),
+            (sim_quick_btns[1][0], sim_quick_btns[1][1],             3),
+            (self.btn_speed,       self._show_speed_popup,           3),
+            (self.btn_run,         self.toggle_sim,                  4),
+        ])
 
         # 2. Main Hardware Modules Body (Authentic Hardware Cards + Expanding Live Console)
         body = tk.Frame(self.sim_panel, bg=BG_PANEL, padx=8, pady=6)
@@ -700,13 +723,137 @@ class BoardPanelsMixin:
 
         self._refresh_hilo_display()
 
+    # ==========================================================================
+    # RESPONSIVE HEADER OVERFLOW ("⋯" MENU)
+    # ==========================================================================
+    def _register_header_overflow(self, hdr, entries):
+        """Make the simulator header degrade gracefully when it is too narrow.
+
+        `entries` is [(widget, command, padx), ...] in creation order, which is
+        also priority order: the FIRST entry is the first to be pushed into the
+        overflow menu, the LAST is the most important and hides last.
+        """
+        self._hdr_frame = hdr
+        self._hdr_items = [{"w": w, "cmd": c, "padx": px} for w, c, px in entries]
+        self._hdr_hidden = []
+        self._hdr_busy = False
+        self._hdr_sig = None
+
+        self.btn_hdr_more = tk.Button(
+            hdr, text="⋯", bg=BG_PILL_INACT, fg=TXT_BRIGHT,
+            activebackground=BG_HOVER, activeforeground=TXT_BRIGHT,
+            bd=0, highlightthickness=1, highlightbackground=BG_PILL_INACT,
+            padx=8, pady=2, cursor="hand2",
+            font=(FONT_UI, 10, "bold"), command=self._show_hdr_overflow_popup
+        )
+        add_hover_border(self.btn_hdr_more, BG_PILL_INACT, BG_HOVER, BG_PILL_INACT, BORDER_HOVER)
+        attach_tooltip(self.btn_hdr_more, self._hdr_overflow_tip)
+
+        hdr.bind("<Configure>", lambda e: self._relayout_sim_header())
+        self.after(150, self._relayout_sim_header)
+
+    def _relayout_sim_header(self):
+        hdr = getattr(self, "_hdr_frame", None)
+        if hdr is None or self._hdr_busy or not hdr.winfo_exists():
+            return
+        total = hdr.winfo_width()
+        if total <= 1:            # not laid out yet
+            return
+
+        title_w = self.sim_board_lbl.winfo_reqwidth() if hasattr(self, "sim_board_lbl") else 0
+        avail = total - title_w - 10
+        widths = {id(it["w"]): it["w"].winfo_reqwidth() + it["padx"] * 2 for it in self._hdr_items}
+
+        if sum(widths.values()) <= avail:
+            keep, hidden = list(self._hdr_items), []
+        else:
+            budget = avail - (self.btn_hdr_more.winfo_reqwidth() + 6)
+            keep, hidden, used, stop = [], [], 0, False
+            for it in reversed(self._hdr_items):      # highest priority first
+                w = widths[id(it["w"])]
+                if not stop and used + w <= budget:
+                    keep.append(it)
+                    used += w
+                else:
+                    stop = True                        # strict priority, no gaps
+                    hidden.append(it)
+            keep.reverse()
+            hidden.reverse()
+
+        sig = tuple(id(it["w"]) for it in keep)
+        if sig == self._hdr_sig:                       # nothing changed -> no churn
+            return
+        self._hdr_sig = sig
+
+        self._hdr_busy = True
+        try:
+            for it in self._hdr_items:
+                it["w"].pack_forget()
+            self.btn_hdr_more.pack_forget()
+            if hidden:
+                self.btn_hdr_more.pack(side=tk.RIGHT, padx=3, pady=5)
+            for it in keep:
+                it["w"].pack(side=tk.RIGHT, padx=it["padx"], pady=5)
+            self._hdr_hidden = hidden
+        finally:
+            self._hdr_busy = False
+
+    def _hdr_overflow_tip(self):
+        """Preview what the overflow menu currently holds, so the
+        ⋯ button is not an opaque mystery."""
+        hidden = getattr(self, "_hdr_hidden", [])
+        if not hidden:
+            return ""
+        nl = chr(10)
+        names = [it["w"].cget("text") for it in hidden]
+        shown = names[:8]
+        more = len(names) - len(shown)
+        body = nl.join("• " + n for n in shown)
+        if more:
+            body += nl + "• … อีก %d รายการ" % more
+        return "เครื่องมือเพิ่มเติม (%d)%s%s" % (len(names), nl, body)
+
+    def _show_hdr_overflow_popup(self):
+        from ui.widgets import SpotifyPopupMenu
+        m = SpotifyPopupMenu(self, tag="BoardHeaderOverflow")
+        for it in self._hdr_hidden:
+            # read the label live so toggling buttons (Run/Pause, speed, COM
+            # port, hw mode) show their current text inside the menu too
+            m.add_command(it["w"].cget("text"), "", it["cmd"])
+        m.show_at_widget(self.btn_hdr_more)
+
+    def _set_run_ui(self, running):
+        """Single source of truth for Run/Pause button appearance.
+
+        Keeps the simulator panel's btn_run and the top toolbar's pill button
+        in sync. Both are optional: either may not exist yet depending on which
+        panels have been built, so each is guarded.
+        """
+        if running:
+            label, color = "⏸ หยุดชั่วคราว", ACCENT_AMBER
+        else:
+            label, color = "▶ เริ่มรันจำลอง", ACCENT_GREEN
+
+        if hasattr(self, "btn_run"):
+            self.btn_run.config(text=label, bg=color)
+
+        if hasattr(self, "btn_run_toolbar"):
+            # set_style() does not touch hover_fill, so keep it in step with
+            # fill_col -- otherwise hovering the amber Pause button redraws green.
+            self.btn_run_toolbar.hover_fill = "#FFB224" if running else "#1FDF64"
+            self.btn_run_toolbar.set_style(
+                text="⏸  Pause" if running else "▶  Run",
+                fill_col=color,
+                fg_col=TXT_ON_WHITE,
+            )
+
     def toggle_sim(self):
         if self.sim_running:
             self.sim_running = False
             if self.sim_after_id:
                 self.after_cancel(self.sim_after_id)
                 self.sim_after_id = None
-            self.btn_run.config(text="▶ เริ่มรันจำลอง", bg=ACCENT_GREEN)
+            self._set_run_ui(False)
             self.status_lbl.config(text="หยุดการจำลองชั่วคราว")
         else:
             # Ensure program instructions are loaded in ROM
@@ -731,7 +878,7 @@ class BoardPanelsMixin:
                 self._apply_overview_visibility()
 
             self.sim_running = True
-            self.btn_run.config(text="⏸ หยุดชั่วคราว", bg=ACCENT_AMBER)
+            self._set_run_ui(True)
             self.status_lbl.config(text="กำลังรันจำลองการทำงานบนบอร์ดเสมือน Nexys A7...")
             self._sim_loop()
 
@@ -743,7 +890,7 @@ class BoardPanelsMixin:
                 self._ensure_runnable_software_loaded()
             if not getattr(self, "compiled_ins", None):
                 self.sim_running = False
-                self.btn_run.config(text="▶ เริ่มรันจำลอง", bg=ACCENT_GREEN)
+                self._set_run_ui(False)
                 self.status_lbl.config(text="กรุณาเปิดไฟล์โค้ด (.c หรือ .s) เพื่อรันจำลอง")
                 return
 
@@ -782,7 +929,7 @@ class BoardPanelsMixin:
                 if self.sim_after_id:
                     self.after_cancel(self.sim_after_id)
                     self.sim_after_id = None
-                self.btn_run.config(text="▶ เริ่มรันจำลอง", bg=ACCENT_GREEN)
+                self._set_run_ui(False)
                 is_mips = (self.get_current_arch() == "mips") if hasattr(self, "get_current_arch") else False
                 ret_val = self.sim_engine.regs[14] if self.sim_engine.regs[14] else (self.sim_engine.regs[2] or self.sim_engine.regs[10])
                 self.status_lbl.config(

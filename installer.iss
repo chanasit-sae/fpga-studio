@@ -1,25 +1,33 @@
 ; Inno Setup Script for FPGA Studio (Spotify Dark Edition)
-; Generates a professional Windows Setup Installer: FPGA_Studio_Setup_v4.2.exe
+; Generates a professional Windows Setup Installer: FPGA_Studio_Setup_v4.3.exe
 
 #define MyAppName "FPGA Studio"
-#define MyAppVersion "4.2"
+#define MyAppVersion "4.3"
 #define MyAppPublisher "FPGA Studio"
 #define MyAppExeName "FPGA Studio.exe"
-#define SourceDir "C:\Users\poswe\.gemini\antigravity\scratch\mips-fpga-plan\fpga_studio"
+; SourcePath is provided by ISPP = folder containing this script
+#define SourceDir RemoveBackslashUnlessRoot(SourcePath)
 
 [Setup]
 AppId={{5F8D3491-912A-4C2E-8E28-76A6C7B2F6E1}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+AppPublisherURL=https://github.com/posweeza558/fpga-studio
+AppSupportURL=https://github.com/posweeza558/fpga-studio/issues
+AppUpdatesURL=https://github.com/posweeza558/fpga-studio/releases
+VersionInfoVersion=4.3.0.0
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+MinVersion=10.0
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
 DefaultGroupName={#MyAppName}
 OutputDir={#SourceDir}\installer_output
-OutputBaseFilename=FPGA_Studio_Setup_v4.2
+OutputBaseFilename=FPGA_Studio_Setup_v4.3
 SetupIconFile={#SourceDir}\app_icon.ico
 UninstallDisplayIcon={app}\app_icon.ico
-Compression=lzma2/fast
+Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
@@ -54,3 +62,28 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilen
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// The bundled GCC toolchains reach 152 chars below {app}, e.g.
+// toolchain\xpack-riscv-...\include\c++\15.2.0\ext\pb_ds\detail\...
+// Windows MAX_PATH is 260, so a long install folder makes setup fail
+// mid-way with "MoveFile failed; code 3". Reject it up front instead.
+const
+  MaxAppDirLen = 97;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID = wpSelectDir then
+  begin
+    if Length(WizardDirValue) > MaxAppDirLen then
+    begin
+      MsgBox('The destination folder path is too long (' + IntToStr(Length(WizardDirValue)) + ' characters).'
+        + #13#10#13#10 + 'FPGA Studio bundles GCC toolchains with deeply nested folders, so the'
+        + ' install path must be at most ' + IntToStr(MaxAppDirLen) + ' characters.'
+        + #13#10#13#10 + 'Please choose a shorter folder, for example:  C:\FPGA Studio',
+        mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+end;

@@ -25,6 +25,74 @@ from config.theme import (
 from ui.graphics import get_antialiased_pill_photo
 
 
+def attach_tooltip(widget, text, delay=500):
+    """Attach a themed hover tooltip to any widget.
+
+    `text` may be a plain string or a zero-arg callable, so captions that
+    depend on live state (counts, current mode) stay correct. Bindings use
+    add="+" so existing <Enter>/<Leave> hover styling is preserved.
+    """
+    state = {"after": None, "win": None}
+
+    def _hide(_event=None):
+        if state["after"] is not None:
+            try:
+                widget.after_cancel(state["after"])
+            except Exception:
+                pass
+            state["after"] = None
+        win, state["win"] = state["win"], None
+        if win is not None:
+            try:
+                win.destroy()
+            except Exception:
+                pass
+
+    def _show():
+        state["after"] = None
+        if state["win"] is not None or not widget.winfo_exists():
+            return
+        try:
+            msg = text() if callable(text) else text
+        except Exception:
+            return
+        if not msg:
+            return
+
+        tip = tk.Toplevel(widget)
+        tip.wm_overrideredirect(True)
+        try:
+            tip.attributes("-topmost", True)
+        except Exception:
+            pass
+        frame = tk.Frame(tip, bg=BG_POPUP, highlightthickness=1, highlightbackground="#3A3A3A")
+        frame.pack()
+        tk.Label(
+            frame, text=msg, bg=BG_POPUP, fg=TXT_PRIMARY,
+            font=(FONT_UI, 8), padx=8, pady=4, justify="left"
+        ).pack()
+
+        tip.update_idletasks()
+        x = widget.winfo_rootx() + widget.winfo_width() // 2 - tip.winfo_width() // 2
+        y = widget.winfo_rooty() + widget.winfo_height() + 6
+        # keep the tip fully on screen
+        x = max(4, min(x, widget.winfo_screenwidth() - tip.winfo_width() - 4))
+        if y + tip.winfo_height() > widget.winfo_screenheight():
+            y = widget.winfo_rooty() - tip.winfo_height() - 6
+        tip.wm_geometry(f"+{x}+{y}")
+        state["win"] = tip
+
+    def _enter(_event=None):
+        _hide()
+        state["after"] = widget.after(delay, _show)
+
+    widget.bind("<Enter>", _enter, add="+")
+    widget.bind("<Leave>", _hide, add="+")
+    widget.bind("<ButtonPress>", _hide, add="+")
+    widget.bind("<Destroy>", _hide, add="+")
+    return _hide
+
+
 class SpotifyPillButton(tk.Canvas):
     """4x Anti-Aliased Capsule Button supporting icons, status dots, and tab close ('✕') button."""
 
