@@ -1414,6 +1414,23 @@ class BoardPanelsMixin:
         if hasattr(self, "_save_project_settings"):
             self._save_project_settings()
 
+        # Apply the mode to the real board right away, not only at the next
+        # upload. Previously this only recoloured the button, so selecting
+        # Step while the board was running froze nothing.
+        # Silent when no board is attached: this is also a saved preference
+        # that can legitimately be set offline.
+        try:
+            ser = getattr(self, "_hw_serial", None)
+            board_reachable = bool(ser is not None and getattr(ser, "is_open", False)) or bool(self._detect_serial_ports())
+        except Exception:
+            board_reachable = False
+
+        if board_reachable:
+            if val == "step":
+                self.pause_hardware_board()      # 'P' -> freeze pipeline
+            else:
+                self.resume_hardware_board()     # 'R' -> free-run 25 MHz
+
     def _show_hw_mode_popup(self):
         from ui.widgets import SpotifyPopupMenu
         m = SpotifyPopupMenu(self, tag="BoardHwModePopup")

@@ -23,6 +23,30 @@ import threading
 from typing import Callable, Dict, List, Optional, Tuple
 
 
+
+def _app_toolchain_roots():
+    """Folders that may contain the bundled toolchain/ directory.
+
+    When frozen, sys._MEIPASS points at _internal/, which does NOT hold the
+    toolchain -- the installer places it next to the .exe. So the real
+    application folder must be searched too.
+    """
+    roots = [os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]
+    if getattr(sys, "frozen", False):
+        roots.append(os.path.dirname(sys.executable))
+    try:
+        from config.catalog import ROOT_DIR as _root_dir
+        if _root_dir:
+            roots.append(_root_dir)
+    except Exception:
+        pass
+    seen, out = set(), []
+    for r in roots:
+        if r and r not in seen:
+            seen.add(r)
+            out.append(r)
+    return out
+
 def find_vivado_binary() -> Optional[str]:
     """Search system PATH and standard drive locations for Vivado or Vivado Lab executable."""
     for bin_name in ("vivado.bat", "vivado_lab.bat", "vivado", "vivado_lab"):
@@ -97,11 +121,12 @@ def find_openfpgaloader_binary(toolchain_dir: Optional[str] = None) -> Optional[
                 return c
 
     # 4. App relative directory
-    app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    fallback_cands = [
-        os.path.join(app_root, "toolchain", "openFPGALoader", "openFPGALoader.exe"),
-        os.path.join(app_root, "toolchain", "openFPGALoader.exe"),
-    ]
+    fallback_cands = []
+    for app_root in _app_toolchain_roots():
+        fallback_cands.extend([
+            os.path.join(app_root, "toolchain", "openFPGALoader", "openFPGALoader.exe"),
+            os.path.join(app_root, "toolchain", "openFPGALoader.exe"),
+        ])
     for c in fallback_cands:
         if os.path.isfile(c):
             return c
