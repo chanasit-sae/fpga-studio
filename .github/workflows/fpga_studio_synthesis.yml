@@ -123,7 +123,7 @@ jobs:
                 if [ -n "$PRJXRAY_DB" ]; then
                   fasm2frames --part xc7a100tcsg324-1 --db-root "$PRJXRAY_DB" soc.fasm soc.frames
                   PART_YAML=$(find "$PRJXRAY_DB" -name "part.yaml" | grep "xc7a100t" | head -n 1)
-                  xc7frames2bit --part_file "$PART_YAML" --frm_file soc.frames --output "nexys_a7_${CPU}.bit"
+                  xc7frames2bit --part_file "$PART_YAML" --part_name "$DEVICE_PART" --frm_file soc.frames --output_file "nexys_a7_${CPU}.bit"
                   echo "Generated bitstream: nexys_a7_${CPU}.bit"
                 fi
               else
