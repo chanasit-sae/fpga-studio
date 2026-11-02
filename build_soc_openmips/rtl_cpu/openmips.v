@@ -72,6 +72,14 @@ module openmips (input wire clk,
     wire[`RegBus] ex_mem_addr_o;
     wire[`RegBus] ex_reg2_o;
     wire ex_is_in_delayslot_i;
+
+    // ---- multi-cycle divider nets ----
+    wire[`DoubleRegBus] div_result;
+    wire                div_ready;
+    wire[`RegBus]       div_opdata1;
+    wire[`RegBus]       div_opdata2;
+    wire                div_start;
+    wire                signed_div;
     wire[`RegBus] ex_link_address_i;
     
     //连接EX/MEM模块的输出与访存阶段MEM模块的输入的变量
@@ -241,6 +249,7 @@ module openmips (input wire clk,
     //EX模块例化
     ex ex0(
     //ports
+    .clk(clk),
     .rst(rst),
     .aluop_i(ex_aluop_i),
     .alusel_i(ex_alusel_i),
@@ -272,7 +281,32 @@ module openmips (input wire clk,
     .cnt_o(cnt_o),
     .hilo_temp_o(hilo_temp_o),
     .link_address_i(ex_link_address_i),
-    .is_in_delayslot_i(ex_is_in_delayslot_i)
+    .is_in_delayslot_i(ex_is_in_delayslot_i),
+
+    // multi-cycle divider handshake
+    .div_result_i(div_result),
+    .div_ready_i(div_ready),
+    .div_opdata1_o(div_opdata1),
+    .div_opdata2_o(div_opdata2),
+    .div_start_o(div_start),
+    .signed_div_o(signed_div)
+    );
+
+    // =========================================================================
+    // 32-bit multi-cycle divider (replaces the behavioural / and % in ex.v)
+    // =========================================================================
+    div div0(
+    .clk(clk),
+    .rst(rst),
+
+    .signed_div_i(signed_div),
+    .opdata1_i(div_opdata1),
+    .opdata2_i(div_opdata2),
+    .start_i(div_start),
+    .annul_i(1'b0),
+
+    .result_o(div_result),
+    .ready_o(div_ready)
     );
     
     

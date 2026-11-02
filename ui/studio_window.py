@@ -363,6 +363,40 @@ class VSCodeFPGAStudio(tk.Tk, FramelessWindowMixin, SidebarPanelsMixin, BoardPan
         self.btn_reset_toolbar.pack(side=tk.LEFT, padx=(0, 6), pady=4)
         attach_tooltip(self.btn_reset_toolbar, "รีเซ็ตการจำลอง (Reset)  •  Ctrl+Shift+R")
 
+        # divider: everything to the left drives the on-screen simulator,
+        # everything to the right drives the real Nexys A7 board
+        tk.Frame(self.sim_toolbar, bg=BORDER_COLOR, width=1).pack(
+            side=tk.LEFT, fill=tk.Y, padx=(6, 10), pady=9)
+
+        self.btn_hw_upload_toolbar = SpotifyPillButton(
+            self.sim_toolbar,
+            text="🚀  Upload to Board",
+            command=self.upload_to_board,
+            bg_parent=BG_BLACK,
+            fill_col="#1E3A8A",
+            fg_col="#BFDBFE",
+            hover_fill="#2563EB",
+            height=28,
+        )
+        self.btn_hw_upload_toolbar.pack(side=tk.LEFT, padx=(0, 6), pady=4)
+        attach_tooltip(self.btn_hw_upload_toolbar,
+                       "อัปโหลดโค้ดลงบอร์ดจริง (USB UART)"
+                       + "  •  คอมไพล์ให้อัตโนมัติ")
+
+        self.btn_hw_step_toolbar = SpotifyPillButton(
+            self.sim_toolbar,
+            text="⚡  Step Board",
+            command=self.step_hardware_board,
+            bg_parent=BG_BLACK,
+            fill_col="#065F46",
+            fg_col="#A7F3D0",
+            hover_fill="#047857",
+            height=28,
+        )
+        self.btn_hw_step_toolbar.pack(side=tk.LEFT, padx=(0, 6), pady=4)
+        attach_tooltip(self.btn_hw_step_toolbar,
+                       "ก้าวทีละคำสั่งบนบอร์ดจริง (Step real board)  •  F11")
+
         # 2. BOTTOM STATUS BAR
         self.status_bar = tk.Frame(self, bg=BG_BLACK, height=28)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=(0, 6))
