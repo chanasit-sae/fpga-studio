@@ -1,4 +1,4 @@
-# ⚡ FPGA Studio (Spotify Dark Edition)
+# ⚡ FPGA Studio 
 
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows)](https://github.com/posweeza558/fpga-studio)
 [![Target FPGA](https://img.shields.io/badge/FPGA-Digilent%20Nexys%20A7--100T-red)](https://digilent.com/reference/programmable-logic/nexys-a7/start)
