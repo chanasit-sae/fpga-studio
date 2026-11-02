@@ -70,7 +70,7 @@ from ui.graphics import (
     add_card_rounded_corners,
     add_hover_border,
 )
-from ui.widgets import SpotifyPillButton, SpotifyPopupMenu, SpotifyAutoScrollbar
+from ui.widgets import SpotifyPillButton, SpotifyPopupMenu, SpotifyAutoScrollbar, attach_tooltip
 from ui.window_manager import FramelessWindowMixin
 from ui.sidebar_panels import SidebarPanelsMixin
 from ui.board_panels import BoardPanelsMixin
@@ -205,6 +205,11 @@ class VSCodeFPGAStudio(tk.Tk, FramelessWindowMixin, SidebarPanelsMixin, BoardPan
         self.bind_all("<Control-Shift-p>", lambda e: self.open_rtl_verify_dialog())
         self.bind_all("<F7>", lambda e: self.open_fpga_programmer_dialog())
         self.bind_all("<F11>", lambda e: self.step_hardware_board() if hasattr(self, "step_hardware_board") else None)
+        # Simulator transport controls (mirrors the Run menu and the top toolbar)
+        self.bind_all("<F5>", lambda e: self.run_and_show_sim())
+        self.bind_all("<F10>", lambda e: self.step_and_show_sim())
+        self.bind_all("<Control-Shift-R>", lambda e: self.reset_sim())
+        self.bind_all("<Control-Shift-r>", lambda e: self.reset_sim())
         self.bind_all("<Escape>", lambda e: SpotifyPopupMenu.close_active(), add="+")
         self.bind_all("<ButtonPress-1>", self._global_click_outside_menu, add="+")
         self._refresh_target_pills()
@@ -312,6 +317,52 @@ class VSCodeFPGAStudio(tk.Tk, FramelessWindowMixin, SidebarPanelsMixin, BoardPan
         btn_min.bind("<Enter>", lambda e: btn_min.config(bg=BG_HOVER, fg=TXT_BRIGHT))
         btn_min.bind("<Leave>", lambda e: btn_min.config(bg=BG_BLACK, fg=TXT_MUTED))
 
+        # 1B. SIMULATION QUICK-ACTION TOOLBAR
+        # Mirrors the Run menu's Step / Reset commands as always-visible buttons.
+        # Both call the exact same handlers the menu does; the menu items remain.
+        self.sim_toolbar = tk.Frame(self, bg=BG_BLACK, height=38)
+        self.sim_toolbar.pack(side=tk.TOP, fill=tk.X, padx=8, pady=(2, 0))
+        self.sim_toolbar.pack_propagate(False)
+
+        self.btn_run_toolbar = SpotifyPillButton(
+            self.sim_toolbar,
+            text="▶  Run",
+            command=self.run_and_show_sim,
+            bg_parent=BG_BLACK,
+            fill_col=ACCENT_GREEN,
+            fg_col=TXT_ON_WHITE,
+            hover_fill="#1FDF64",
+            height=28,
+        )
+        self.btn_run_toolbar.pack(side=tk.LEFT, padx=(6, 6), pady=4)
+        attach_tooltip(self.btn_run_toolbar, lambda: (
+            "หยุดชั่วคราว (Pause)" if getattr(self, "sim_running", False)
+            else "เริ่มรันจำลอง (Run)") + "  •  F5")
+
+        self.btn_step_toolbar = SpotifyPillButton(
+            self.sim_toolbar,
+            text="⏭  Step Instruction",
+            command=self.step_and_show_sim,
+            bg_parent=BG_BLACK,
+            fill_col=BG_PILL_INACT,
+            fg_col=TXT_BRIGHT,
+            height=28,
+        )
+        self.btn_step_toolbar.pack(side=tk.LEFT, padx=(0, 6), pady=4)
+        attach_tooltip(self.btn_step_toolbar, "รันทีละคำสั่ง (Step)  •  F10")
+
+        self.btn_reset_toolbar = SpotifyPillButton(
+            self.sim_toolbar,
+            text="🔄  Reset Simulation",
+            command=self.reset_sim,
+            bg_parent=BG_BLACK,
+            fill_col=BG_PILL_INACT,
+            fg_col=TXT_BRIGHT,
+            height=28,
+        )
+        self.btn_reset_toolbar.pack(side=tk.LEFT, padx=(0, 6), pady=4)
+        attach_tooltip(self.btn_reset_toolbar, "รีเซ็ตการจำลอง (Reset)  •  Ctrl+Shift+R")
+
         # 2. BOTTOM STATUS BAR
         self.status_bar = tk.Frame(self, bg=BG_BLACK, height=28)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=(0, 6))
@@ -353,6 +404,14 @@ class VSCodeFPGAStudio(tk.Tk, FramelessWindowMixin, SidebarPanelsMixin, BoardPan
             ("overview",   "\uE9D9", self.toggle_overview, False),
         ]
 
+        rail_tips = {
+            "explorer":  "Explorer — ไฟล์ในโปรเจกต์  (Ctrl+B)",
+            "search":    "ค้นหาในโปรเจกต์  (Ctrl+Shift+F)",
+            "chip":      "32-bit Machine Code / Opcode",
+            "simulator": "บอร์ดจำลอง Nexys A7  (Ctrl+J)",
+            "overview":  "CPU & Registers  (Ctrl+K)",
+        }
+
         for key, glyph, cmd, is_active in rail_items:
             cell = tk.Frame(act_bar, bg=BG_ACTIVITY, width=56, height=52)
             cell.pack(fill=tk.X, pady=2)
@@ -384,6 +443,7 @@ class VSCodeFPGAStudio(tk.Tk, FramelessWindowMixin, SidebarPanelsMixin, BoardPan
 
             btn.bind("<Enter>", _r_enter)
             btn.bind("<Leave>", _r_leave)
+            attach_tooltip(btn, rail_tips.get(key, ""))
             self.rail_buttons[key] = (ind, btn)
 
         self._update_simulator_rail_button()
@@ -901,7 +961,7 @@ class VSCodeFPGAStudio(tk.Tk, FramelessWindowMixin, SidebarPanelsMixin, BoardPan
 
         def build_run_menu():
             m = SpotifyPopupMenu(self, tag="Run")
-            m.add_command("▶  เริ่มรัน / หยุดจำลอง", "", self.run_and_show_sim)
+            m.add_command("▶  เริ่มรัน / หยุดจำลอง", "F5", self.run_and_show_sim)
             m.add_separator()
             m.add_radiobutton("⏱️  ความเร็ว: 🐢 1 Hz (ช้ามาก 1 วิ/คำสั่ง)", self.sim_speed_var, "1Hz", self._on_sim_speed_changed)
             m.add_radiobutton("⏱️  ความเร็ว: 🚶 5 Hz (ช้า 200ms / กำลังดี)", self.sim_speed_var, "5Hz", self._on_sim_speed_changed)
@@ -909,8 +969,8 @@ class VSCodeFPGAStudio(tk.Tk, FramelessWindowMixin, SidebarPanelsMixin, BoardPan
             m.add_radiobutton("⏱️  ความเร็ว: ⚡ 100 Hz (เร็ว 10ms)", self.sim_speed_var, "100Hz", self._on_sim_speed_changed)
             m.add_radiobutton("⏱️  ความเร็ว: 🚀 Max Speed (เต็มสปีด / ทันที)", self.sim_speed_var, "max", self._on_sim_speed_changed)
             m.add_separator()
-            m.add_command("⏭  รันทีละคำสั่ง (Step Single Instruction)", "", self.step_and_show_sim)
-            m.add_command("🔄  รีเซ็ตการจำลอง (Reset Simulation)", "", self.reset_sim)
+            m.add_command("⏭  รันทีละคำสั่ง (Step Single Instruction)", "F10", self.step_and_show_sim)
+            m.add_command("🔄  รีเซ็ตการจำลอง (Reset Simulation)", "Ctrl+Shift+R", self.reset_sim)
             m.add_separator()
             m.add_command("🔬  วิเคราะห์ 5-Stage Pipeline & ทดสอบ RTL Testbench...", "Ctrl+Shift+P", self.open_rtl_verify_dialog)
             m.add_command("⚡  แฟลชฮาร์ดแวร์ CPU ลงบอร์ด FPGA (In-App JTAG)", "F7", self.open_fpga_programmer_dialog)
@@ -1343,8 +1403,7 @@ class VSCodeFPGAStudio(tk.Tk, FramelessWindowMixin, SidebarPanelsMixin, BoardPan
             if hasattr(self, "sim_after_id") and self.sim_after_id:
                 self.after_cancel(self.sim_after_id)
                 self.sim_after_id = None
-            if hasattr(self, "btn_run"):
-                self.btn_run.config(text="▶ เริ่มรันจำลอง", bg=ACCENT_GREEN)
+            self._set_run_ui(False)
 
         # 2. Fully reset CPU simulation state & Pointer (PC=0, registers=0, cycles=0)
         if hasattr(self, "sim_engine"):
